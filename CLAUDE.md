@@ -8,14 +8,14 @@ Two subsystems live here:
 1. **Enigma** — a **from-scratch** decoder-only LLM (its own architecture, BPE tokenizer base vocab
    4718, and weights; NOT a wrapper). Python. Pipeline is **pretrain → SFT → serve**; train + serve
    share one chat renderer (`enigma_engine/core/chat_format.py`) so the prompt format can't drift.
-2. **Avatar overlay** (`mods/avatar/`) — an Electron + Three.js transparent desktop pet that drives
+2. **Enigma Avatar** (`enigma-avatar/`) — a sibling product (relocated out of `mods/`): an Electron + Three.js transparent desktop pet that drives
    any `.glb`/`.vrm` with **pure procedural** motion (no canned animation), composited from masked,
    weighted pose/flex layers fed over a local WebSocket bus. See the Avatar section below.
 
 ## Setup / build / test — run these first
 - Python 3.12 (`C:\Users\SirKn\AppData\Local\Programs\Python\Python312\python.exe`).
 - Enigma tests: `python -m pytest tests/ -q`   ·   Lint: `ruff check`
-- Avatar tests: `cd mods/avatar && node --test` (Node built-in runner; ~197 tests, some skip
+- Avatar tests: `cd enigma-avatar && node --test` (Node built-in runner; ~217 tests, some skip
   without the real model library). `node --check <file>.js` for a quick syntax pass.
 - If a fresh session can't run the tests from this section, fix THIS section first.
 
@@ -39,7 +39,7 @@ Two subsystems live here:
 - From-scratch ethos: prefer fresh, correct code; engines should fail honestly ("feature absent")
   rather than guess.
 
-## Avatar mod (`mods/avatar/`)
+## Enigma Avatar (`enigma-avatar/`) — a sibling product, not a mod
 - **Authoritative spec lives OUTSIDE the repo:** `C:\Users\SirKn\3d Avatar\The project is to make a
   3d model t.txt` (REV 6). Models live in `C:\Users\SirKn\3d Avatar\Avatars\`. Judge/recode against
   the SPEC's intent, NOT against what the code currently does — passing tests often just enshrine
@@ -73,7 +73,7 @@ Two subsystems live here:
 - **No C++ build toolchain on this box.** Only adopt npm/native deps that ship PREBUILT binaries —
   verify before installing. (`koffi`, a prebuilt FFI, works and is how the overlay calls Win32;
   `node-window-manager` needed a compiler and failed. Wasted a round-trip installing it.)
-- **One-off Electron/Node probes: run them from `mods/avatar/`** (so `node_modules` resolves), write
+- **One-off Electron/Node probes: run them from `enigma-avatar/`** (so `node_modules` resolves), write
   the result to a file and `process.exit()`, then delete the probe. Running from a dir without
   `node_modules` (e.g. the scratchpad), piping stdout through another command, or relying on
   `app.quit()` makes Electron HANG or pop a blocking GUI error dialog in this non-interactive shell —

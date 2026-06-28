@@ -1,7 +1,7 @@
 """Bridge: run the avatar's JS unit tests (node --test) inside the pytest suite.
 
 The engine's pure logic lives in JavaScript (fit math, name matching, the model
-library), so the real assertions are in ``mods/avatar/tests/*.test.js``. This wrapper
+library), so the real assertions are in ``enigma-avatar/tests/*.test.js``. This wrapper
 runs them via the portable Node interpreter so ``pytest`` covers them too, alongside
 ``tests/test_avatar_bone_data.py``. Skips cleanly if Node isn't available.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-AVATAR_DIR = Path(__file__).resolve().parents[1] / "mods" / "avatar"
+AVATAR_DIR = Path(__file__).resolve().parents[1] / "enigma-avatar"
 
 
 def _find_node() -> str | None:
@@ -31,7 +31,7 @@ def test_avatar_js_rig_tests_pass() -> None:
     if not node:
         pytest.skip("node not found (portable Node or PATH) — JS rig tests skipped")
     if not (AVATAR_DIR / "node_modules" / "three").exists():
-        pytest.skip("avatar node_modules/three not installed — run npm install in mods/avatar")
+        pytest.skip("avatar node_modules/three not installed — run npm install in enigma-avatar")
     proc = subprocess.run(
         [node, "--test"],  # auto-discovers tests/*.test.js (skips node_modules)
         cwd=str(AVATAR_DIR),

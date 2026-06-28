@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-DATA_PATH = Path(__file__).resolve().parents[1] / "mods" / "avatar" / "bone_limits.json"
+DATA_PATH = Path(__file__).resolve().parents[1] / "enigma-avatar" / "bone_limits.json"
 
 EXPECTED_BONES = {
     "head",

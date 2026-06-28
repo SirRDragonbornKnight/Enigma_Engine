@@ -1,6 +1,6 @@
 """Regression guard for the avatar bus CSWSH (cross-site WebSocket hijacking) gate.
 
-The bus (``mods/avatar/bus.py``) is a local relay on ``ws://127.0.0.1:8765`` that can
+The bus (``enigma-avatar/bus.py``) is a local relay on ``ws://127.0.0.1:8765`` that can
 load models, toggle meshes, and read query replies. Binding to localhost stops the
 *network*, but a web page the user happens to visit can still open a WebSocket to
 127.0.0.1 from their browser — so the bus refuses any handshake carrying an http(s)
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-AVATAR_DIR = Path(__file__).resolve().parents[1] / "mods" / "avatar"
+AVATAR_DIR = Path(__file__).resolve().parents[1] / "enigma-avatar"
 if str(AVATAR_DIR) not in sys.path:
     sys.path.insert(0, str(AVATAR_DIR))
 
