@@ -18,7 +18,6 @@ import argparse
 import base64
 import json
 import logging
-import os
 import socket
 import struct
 import threading
@@ -27,7 +26,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -86,7 +85,7 @@ class ScreenCapture:
     def load(self) -> bool:
         # Try different capture methods
         try:
-            import mss
+            import mss  # noqa: F401  -- availability probe (import success = capability present)
             self._method = "mss"
             self.is_loaded = True
             logger.info("Using mss for screen capture")
@@ -95,7 +94,7 @@ class ScreenCapture:
             pass
         
         try:
-            from PIL import ImageGrab
+            from PIL import ImageGrab  # noqa: F401  -- availability probe (import success = capability present)
             self._method = "pil"
             self.is_loaded = True
             logger.info("Using PIL for screen capture")
@@ -104,7 +103,7 @@ class ScreenCapture:
             pass
         
         try:
-            import pyautogui
+            import pyautogui  # noqa: F401  -- availability probe (import success = capability present)
             self._method = "pyautogui"
             self.is_loaded = True
             logger.info("Using pyautogui for screen capture")
@@ -187,7 +186,6 @@ class OCR:
         # Try Tesseract
         try:
             import pytesseract
-            from PIL import Image
             # Test if tesseract is available
             pytesseract.get_tesseract_version()
             self._method = "tesseract"

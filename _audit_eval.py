@@ -41,7 +41,8 @@ step = int(ck.get("step", -1))
 from enigma_engine.core.model import Enigma
 from enigma_engine.core.model_presets import ForgeConfig
 config = ForgeConfig.from_dict(ck["config"])
-if BLOCK > config.max_seq_len: config.max_seq_len = BLOCK
+if BLOCK > config.max_seq_len:
+    config.max_seq_len = BLOCK
 config.dropout = 0.0
 model = Enigma(config).to(device).eval()
 missing, unexpected = model.load_state_dict(ck["model_state_dict"], strict=False)

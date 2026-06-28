@@ -252,7 +252,7 @@ def main():
     # Summary
     # ------------------------------------------------------------------
     print(f"\n{'=' * 60}")
-    print(f"  Done!")
+    print("  Done!")
     print(f"  Tokens:    {total_tokens:,}")
     print(f"  Documents: {total_docs:,}")
     print(f"  Files:     {total_files:,}")

@@ -186,6 +186,10 @@ ignore = [
 "tests/*" = ["S", "B", "PLW"]  # relax security + bugbear in tests
 "plugins/*" = ["F401"]          # unused imports OK in plugin examples
 "mods/*" = ["S"]               # relax security in mod templates
+# Avatar diagnostic/probe scripts: terse one-statement-per-line style (cf. the global E702 ignore).
+# These are dev tools, not shipped engine code — keep them compact.
+"mods/avatar/tools/*" = ["S", "E701", "E731", "PLW0108"]
+"mods/avatar/outputs/*" = ["S", "E701", "E731"]
 
 # --- Bandit (security scanner) ---
 [tool.bandit]

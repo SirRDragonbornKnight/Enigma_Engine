@@ -717,6 +717,7 @@ class Enigma(nn.Module):
         *,  # Force keyword-only args after this
         return_logits: bool = False,
         stream: bool = False,
+        min_p: float = 0.0,
     ) -> Union[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """
         Generate tokens autoregressively.
@@ -731,6 +732,7 @@ class Enigma(nn.Module):
             stop_tokens: Token IDs that stop generation
             return_logits: If True, also return the final logits
             stream: If True, use streaming generation (returns generator)
+            min_p: Min-p filter threshold (0 = off); see sample_next_token
 
         Returns:
             Generated token IDs, or (token_ids, logits) if return_logits=True,
@@ -765,7 +767,7 @@ class Enigma(nn.Module):
         if stream:
             return self.generate_stream(
                 input_ids, max_new_tokens, temperature, top_k, top_p,
-                repetition_penalty, stop_tokens
+                repetition_penalty, stop_tokens, min_p=min_p
             )
 
         self.clear_cache()
@@ -778,7 +780,7 @@ class Enigma(nn.Module):
         for _ in range(max_new_tokens):
             next_token = sample_next_token(
                 logits[:, -1, :], generated, temperature,
-                top_k, top_p, repetition_penalty,
+                top_k, top_p, repetition_penalty, min_p=min_p,
             )
             generated = torch.cat([generated, next_token], dim=1)
 
@@ -802,7 +804,8 @@ class Enigma(nn.Module):
         top_k: int = 50,
         top_p: float = 0.9,
         repetition_penalty: float = 1.1,
-        stop_tokens: Optional[list[int]] = None
+        stop_tokens: Optional[list[int]] = None,
+        min_p: float = 0.0,
     ) -> Generator[torch.Tensor, None, None]:
         """
         Streaming token generation - yields tokens as they're generated.
@@ -839,6 +842,7 @@ class Enigma(nn.Module):
             top_p: Nucleus sampling threshold
             repetition_penalty: Penalty for repeating tokens
             stop_tokens: Token IDs that stop generation
+            min_p: Min-p filter threshold (0 = off); see sample_next_token
 
         Yields:
             Individual tokens as they're generated [1] tensor
@@ -856,7 +860,7 @@ class Enigma(nn.Module):
         for _ in range(max_new_tokens):
             next_token = sample_next_token(
                 logits[:, -1, :], generated, temperature,
-                top_k, top_p, repetition_penalty,
+                top_k, top_p, repetition_penalty, min_p=min_p,
             )
 
             # Yield the token immediately

@@ -91,7 +91,6 @@ class BuiltinVideo:
         
         try:
             from PIL import Image, ImageDraw
-            import math
             
             start = time.time()
             images = []
@@ -161,7 +160,7 @@ class BuiltinVideo:
             draw.line([(0, y + offset), (w, y + offset)], fill=color, width=2)
     
     def _draw_fire(self, draw, w, h, t, colors):
-        import math, random
+        import random
         random.seed(int(t * 100))
         for _ in range(50):
             x = random.randint(w//4, 3*w//4)
@@ -191,12 +190,10 @@ class BuiltinVideo:
         draw.ellipse([x-25, y-25, x+25, y+25], fill=colors['accent'])
     
     def _draw_pulse(self, draw, w, h, t, colors):
-        import math
         cx, cy = w//2, h//2
         for i in range(5):
             phase = (t + i * 0.2) % 1
             radius = int(min(w, h) * 0.4 * phase)
-            alpha = int(255 * (1 - phase))
             if radius > 0:
                 draw.ellipse([cx-radius, cy-radius, cx+radius, cy+radius], 
                            outline=(*colors['fg'][:3],), width=2)
@@ -426,7 +423,7 @@ class VideoGen:
             )
             self._socket.sendall(reg_msg.to_bytes())
             self._running = True
-            logger.info(f"Connected to router")
+            logger.info("Connected to router")
             
             while self._running:
                 try:

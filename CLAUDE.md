@@ -64,6 +64,24 @@ Two subsystems live here:
 ## Working style
 - "Make a plan first" means present the plan and **stop for approval** — don't build it in the same pass.
 - Scope to exactly what's asked; deliver small, verify, then continue.
+- **Fix in place, don't compensate.** When code already in the program is wrong or needs to change,
+  CHANGE that code — don't bolt on new code (shims, wrapper layers, fallback branches, parallel
+  implementations) to work around it. Adding compensating code to dodge a real fix leaves two versions
+  of the truth to drift apart and grows the surface to maintain. Edit the source of the problem.
+
+## Gotchas (mistakes made here — don't repeat them)
+- **No C++ build toolchain on this box.** Only adopt npm/native deps that ship PREBUILT binaries —
+  verify before installing. (`koffi`, a prebuilt FFI, works and is how the overlay calls Win32;
+  `node-window-manager` needed a compiler and failed. Wasted a round-trip installing it.)
+- **One-off Electron/Node probes: run them from `mods/avatar/`** (so `node_modules` resolves), write
+  the result to a file and `process.exit()`, then delete the probe. Running from a dir without
+  `node_modules` (e.g. the scratchpad), piping stdout through another command, or relying on
+  `app.quit()` makes Electron HANG or pop a blocking GUI error dialog in this non-interactive shell —
+  this happened twice and landed an error dialog on the user.
+- **Verify load-bearing numbers/line-refs with a direct tool call BEFORE relaying them** — never trust
+  subagent audit output. Reports here claimed a "1600-char" line (the real max was 702) and line
+  numbers off by ~100, and inflated an ASCII-rule count by conflating comments + on-screen text with
+  actual terminal output. Measure, show the receipt. (See also: ground every load-bearing number.)
 
 ## Project state docs
 `CLEANUP_TRACKER.md`, `CODE_REVIEW.md`, `KNOWN_ISSUES.md`, `SUGGESTIONS.md`.

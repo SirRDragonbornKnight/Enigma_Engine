@@ -283,9 +283,7 @@ def quality_filter(text: str, min_length: int) -> bool:
     if alpha_ratio < 0.5:
         return False
     sentence_endings = text.count('.') + text.count('?') + text.count('!')
-    if sentence_endings < 3:
-        return False
-    return True
+    return sentence_endings >= 3
 
 
 # Strong signals that text is AI-generated
@@ -346,10 +344,7 @@ def detect_ai_content(text: str) -> bool:
 
     # Count distinct weak markers
     weak_hits = sum(1 for marker in _AI_WEAK_MARKERS if marker in text_lower)
-    if weak_hits >= 4:
-        return True
-
-    return False
+    return weak_hits >= 4
 
 
 # ---------------------------------------------------------------------------
@@ -395,15 +390,15 @@ def _download_wiki_dump(resume: bool = True) -> bool:
         headers["Range"] = f"bytes={downloaded}-"
         mode = "ab"
 
-    print(f"  [Wiki Dump] Downloading from dumps.wikimedia.org...")
-    print(f"  [Wiki Dump] This is ~22 GB — expect 30-90 min depending on connection speed.")
-    print(f"  [Wiki Dump] Safe to Ctrl+C and --resume later.")
+    print("  [Wiki Dump] Downloading from dumps.wikimedia.org...")
+    print("  [Wiki Dump] This is ~22 GB — expect 30-90 min depending on connection speed.")
+    print("  [Wiki Dump] Safe to Ctrl+C and --resume later.")
 
     try:
         resp = SESSION.get(WIKI_DUMP_URL, headers=headers, stream=True, timeout=60)
         if resp.status_code == 416:
             # Range not satisfiable — file is already complete
-            print(f"  [Wiki Dump] Download already complete.")
+            print("  [Wiki Dump] Download already complete.")
             return True
         resp.raise_for_status()
 
@@ -421,7 +416,6 @@ def _download_wiki_dump(resume: bool = True) -> bool:
         last_print = downloaded
         start_time = time.monotonic()
         last_print_time = start_time
-        download_start_bytes = downloaded
 
         with open(WIKI_DUMP_FILE, mode) as f:
             for chunk in resp.iter_content(chunk_size=chunk_size):
@@ -455,7 +449,7 @@ def _download_wiki_dump(resume: bool = True) -> bool:
         return False
     except requests.RequestException as e:
         print(f"  [Wiki Dump] Download error: {e}")
-        print(f"  [Wiki Dump] Run with --resume to retry.")
+        print("  [Wiki Dump] Run with --resume to retry.")
         return False
 
 
@@ -607,8 +601,8 @@ def process_wiki_dump(progress: dict) -> int:
               f"({total_bytes_written / 1e9:.2f} GB)")
 
     print(f"  [Wiki Dump] Processing dump file ({WIKI_DUMP_FILE.stat().st_size / 1e9:.1f} GB)...")
-    print(f"  [Wiki Dump] This takes 2-6 hours depending on CPU speed.")
-    print(f"  [Wiki Dump] Safe to Ctrl+C and --resume later.")
+    print("  [Wiki Dump] This takes 2-6 hours depending on CPU speed.")
+    print("  [Wiki Dump] Safe to Ctrl+C and --resume later.")
 
     # Auto-detect MediaWiki XML namespace from dump header
     ns = None
@@ -620,7 +614,7 @@ def process_wiki_dump(progress: dict) -> int:
         # Stream decompress + parse — constant memory
         # Use start+end events so we can track root for memory cleanup
         with bz2.open(str(WIKI_DUMP_FILE), 'rb') as f:
-            context = ET.iterparse(f, events=('start', 'end'))
+            context = ET.iterparse(f, events=('start', 'end'))  # noqa: S314  -- parses the official Wikipedia dump (trusted source); use defusedxml if a source ever becomes untrusted
             root = None
 
             for event, elem in context:
@@ -763,8 +757,8 @@ def process_wiki_dump(progress: dict) -> int:
               f"Run with --resume to continue.")
     except ET.ParseError as e:
         print(f"  [Wiki Dump] XML parse error: {e}")
-        print(f"  [Wiki Dump] The dump file may be corrupted. "
-              f"Delete it and re-download: --wiki-dump")
+        print("  [Wiki Dump] The dump file may be corrupted. "
+              "Delete it and re-download: --wiki-dump")
 
     # Final stats
     elapsed_min = (time.monotonic() - start_time) / 60
@@ -1353,7 +1347,7 @@ def get_gutenberg_catalog(max_books: int) -> list[dict]:
         gutendex_errors = 0
 
         # First pass: popular books by download count (sort=-download_count)
-        print(f"  [Gutenberg] Discovering additional books via gutendex API...")
+        print("  [Gutenberg] Discovering additional books via gutendex API...")
         page = 1
         while len(books) < max_books and page <= 50 and gutendex_errors < 5:
             try:
@@ -1822,7 +1816,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
 
         except requests.RequestException as e:
             print(f"  [StackExchange] {site_name}: download error: {e}")
-            print(f"  [StackExchange] Run with --resume to retry.")
+            print("  [StackExchange] Run with --resume to retry.")
             continue
 
         # Extract Posts.xml from 7z archive
@@ -1857,7 +1851,7 @@ def fetch_stackexchange(sites: list[str], min_score: int,
         questions: dict[str, str] = {}  # id -> title, for context
 
         try:
-            for event, elem in ET.iterparse(str(posts_xml_path), events=('end',)):
+            for event, elem in ET.iterparse(str(posts_xml_path), events=('end',)):  # noqa: S314  -- parses a downloaded StackExchange data dump (trusted source); use defusedxml if untrusted
                 if elem.tag != 'row':
                     continue
 
@@ -3184,8 +3178,8 @@ def print_stats() -> None:
         total_str = f"{total_size / 1024 / 1024:6.1f} MB"
     print(f"  {'TOTAL:':16s} {total_files:>6d} files  ({total_str})")
     print()
-    print(f"  Ready for training: data/pretrain/combined.txt")
-    print(f"  Load this file in FORGE -> Pre-Train mode")
+    print("  Ready for training: data/pretrain/combined.txt")
+    print("  Load this file in FORGE -> Pre-Train mode")
     print("=" * 60)
 
 

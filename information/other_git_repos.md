@@ -289,3 +289,19 @@ Gaps discovered by reading actual Enigma source code, not just repo comparisons:
 ---
 
 **Cross-reference:** The consolidated backlog of all actionable findings from these reviews is in `SUGGESTIONS.md` (Open Backlog section, including the new "Realistic Priority Assessment" section). This file is the per-repo detail reference.
+
+---
+
+## Curriculum / course references (not raw model code — learning material, mine when training Enigma further)
+
+⬜ = bookmarked, not yet mined for actionable patterns.
+
+- **rohitg00/ai-engineering-from-scratch** ⬜ — 503-lesson, 20-phase AI-engineering *curriculum* (Python/TS/Rust/Julia; PyTorch/JAX). 33.1k★, 5.4k forks, MIT. Not a model/library — a course that teaches the whole field from math → production. It is essentially the textbook for what Enigma builds by hand. Phases that map onto Enigma's training stack, to mine when we train her more:
+  - Phase 6 (transformers), Phase 10 (LLM training), Phase 11 (LLM engineering) → `pretrain_enigma.py` / `finetune_enigma.py` / `model.py`
+  - Phase 13 (tools/protocols/MCP), Phases 14–15 (agents) → Modkit + Odysseus
+  - **Highest value where Enigma is thinnest/unproven:** eval rigor, RLHF/reward modeling (`rl_training.py`, `reward_functions.py` — Pass-3 flagged PPO as missing 7 components), multimodal, alignment.
+  - Added 2026-06-15.
+
+## Comparable systems / prior art (shipped products in Enigma's problem space)
+
+- **tinyhumansai/openhuman** ⬜ — private, local-first desktop AI companion. Rust 61.6% / TS 35.5%, Tauri+CEF shell, SQLite. 32.3k★, 3.1k forks, GPL-3.0 (copyleft — borrow *ideas*, not code), early beta. The closest shipped parallel to the **Odysseus + Modkit + avatar** trinity: desktop mascot w/ voice + "background thinking" (≈ avatar), local "Memory Tree" w/ hierarchical summarization + Obsidian wiki (≈ Odysseus memory), model routing per workload (≈ `enigma_engine/router.py`), native tools web/fs/git/voice (≈ mods/skills), optional Ollama. **What they have that we don't:** 118+ one-click OAuth integrations via **Composio** + auto-fetch (every 20 min) into the Memory Tree → "warm-start" memory; **TokenJuice** context compression (~80% cost cut). **What we have that they don't:** we forge our *own* model (they only route to existing LLMs); a real rigged GLB avatar engine (theirs is a mascot gimmick). Mine for: Composio integration layer + auto-ingesting hierarchical Memory Tree (directly upgrades `memory_store.py`). Added 2026-06-15.

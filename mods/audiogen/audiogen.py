@@ -436,7 +436,7 @@ class AudioGen:
             )
             self._socket.sendall(reg_msg.to_bytes())
             self._running = True
-            logger.info(f"Connected to router")
+            logger.info("Connected to router")
             
             while self._running:
                 try:

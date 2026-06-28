@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import sys
 import time
 import traceback
@@ -106,7 +105,7 @@ def _check_imports():
     ]
     for name, stmt in modules:
         try:
-            exec(stmt)
+            exec(stmt)  # noqa: S102  -- stmt comes from the hardcoded import list above, not user input
             print(f"  [OK] {name}")
             _log.log("system", f"import {name}", status="ok")
         except Exception as exc:
@@ -161,7 +160,7 @@ def _check_data():
         print(f"  Fine-tune data: {biggest.name} ({biggest.stat().st_size / 1024:.1f} KB)")
     else:
         biggest = None
-        print(f"  Fine-tune data: NONE FOUND")
+        print("  Fine-tune data: NONE FOUND")
 
     # Pre-train data
     if pretrain_dir.exists():
@@ -170,7 +169,7 @@ def _check_data():
         print(f"  Pre-train data: {len(pretrain_files)} files ({total_size / 1e6:.1f} MB)")
     else:
         pretrain_files = []
-        print(f"  Pre-train data: NONE (data/pretrain/ not found)")
+        print("  Pre-train data: NONE (data/pretrain/ not found)")
 
     return biggest, pretrain_files
 
@@ -194,7 +193,7 @@ def _test_tokenizer():
     print(f"  Decoded  : '{decoded[:60]}'")
 
     if len(tokens) == 0:
-        print(f"  [FAIL] Tokenizer produced 0 tokens!")
+        print("  [FAIL] Tokenizer produced 0 tokens!")
         return None
     if vocab < 100:
         print(f"  [WARN] Very small vocab ({vocab}) — training may be slow")
@@ -210,7 +209,6 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     from enigma_engine.core.model import Enigma
     from enigma_engine.core.model_presets import get_preset
     from enigma_engine.training.training import Trainer, TrainingConfig
-    from enigma_engine.core.dataset import process_text_corpus
 
     # Use a small sample of pretrain data — cap at ~200K chars for speed
     MAX_CHARS = 200_000
@@ -232,7 +230,7 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
 
     print(f"  Data     : {len(text):,} chars")
     if len(text) < 100:
-        print(f"  [FAIL] Not enough data. Need at least 100 chars.")
+        print("  [FAIL] Not enough data. Need at least 100 chars.")
         return False
 
     # Create model from preset
@@ -307,7 +305,7 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     def on_throughput(tokens, step_time):
         results["tokens_total"] += tokens
         tps = tokens / step_time if step_time > 0 else 0
-        _log.log("throughput", f"batch done",
+        _log.log("throughput", "batch done",
                  tokens=tokens, step_time=round(step_time, 4),
                  tokens_per_sec=round(tps))
 
@@ -330,7 +328,7 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
 
     elapsed = time.monotonic() - t0
     speed = state.total_tokens / elapsed if elapsed > 0 else 0
-    print(f"\n  --- RESULTS ---")
+    print("\n  --- RESULTS ---")
     print(f"  Time     : {elapsed:.1f}s")
     print(f"  Steps    : {state.step}")
     print(f"  Tokens   : {state.total_tokens:,}")
@@ -352,10 +350,10 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
     # Sanity checks
     ok = True
     if math.isinf(state.best_loss):
-        print(f"  [FAIL] best_loss is inf — training didn't produce any valid loss")
+        print("  [FAIL] best_loss is inf — training didn't produce any valid loss")
         ok = False
     if state.step == 0:
-        print(f"  [FAIL] 0 steps completed — training loop didn't execute")
+        print("  [FAIL] 0 steps completed — training loop didn't execute")
         ok = False
     if results["epoch_losses"] and results["epoch_losses"][-1] > 100:
         print(f"  [WARN] Final loss very high ({results['epoch_losses'][-1]:.1f})")
@@ -363,12 +361,12 @@ def _test_pretrain(device: str, pretrain_files: list[Path],
         if results["epoch_losses"][-1] < results["epoch_losses"][0]:
             print(f"  [OK] Loss decreased: {results['epoch_losses'][0]:.4f} -> {results['epoch_losses'][-1]:.4f}")
         else:
-            print(f"  [WARN] Loss did not decrease — model may not be learning")
+            print("  [WARN] Loss did not decrease — model may not be learning")
 
     if ok:
-        print(f"\n  PRE-TRAIN: PASS")
+        print("\n  PRE-TRAIN: PASS")
     else:
-        print(f"\n  PRE-TRAIN: FAIL")
+        print("\n  PRE-TRAIN: FAIL")
 
     # Cleanup
     del model, trainer
@@ -393,7 +391,7 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
     print(f"  Data     : {data_file.name} ({len(text):,} chars)")
 
     if len(text) < 100:
-        print(f"  [SKIP] Data too small for fine-tune test")
+        print("  [SKIP] Data too small for fine-tune test")
         return True
 
     config = get_preset(preset_name, vocab_size=tokenizer.vocab_size)
@@ -438,7 +436,7 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
 
     def on_throughput(tokens, step_time):
         tps = tokens / step_time if step_time > 0 else 0
-        _log.log("throughput", f"finetune batch",
+        _log.log("throughput", "finetune batch",
                  tokens=tokens, step_time=round(step_time, 4),
                  tokens_per_sec=round(tps))
 
@@ -461,7 +459,7 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
         return False
 
     elapsed = time.monotonic() - t0
-    print(f"\n  --- RESULTS ---")
+    print("\n  --- RESULTS ---")
     print(f"  Time     : {elapsed:.1f}s")
     print(f"  Steps    : {state.step}")
     print(f"  Best loss: {state.best_loss:.4f}")
@@ -478,16 +476,16 @@ def _test_finetune(device: str, data_file: Path, tokenizer,
 
     ok = True
     if math.isinf(state.best_loss):
-        print(f"  [FAIL] best_loss is inf")
+        print("  [FAIL] best_loss is inf")
         ok = False
     if state.step == 0:
-        print(f"  [FAIL] 0 steps")
+        print("  [FAIL] 0 steps")
         ok = False
 
     if ok:
-        print(f"\n  FINE-TUNE: PASS")
+        print("\n  FINE-TUNE: PASS")
     else:
-        print(f"\n  FINE-TUNE: FAIL")
+        print("\n  FINE-TUNE: FAIL")
 
     del model, trainer
     if torch.cuda.is_available():
@@ -539,7 +537,7 @@ def _test_gui_callbacks():
     def _cb_throughput(t, s):
         counts["throughput"] += 1
         tps = t / s if s > 0 else 0
-        _log.log("throughput", f"callback-test batch",
+        _log.log("throughput", "callback-test batch",
                  tokens=t, tokens_per_sec=round(tps))
 
     trainer.on_progress = _cb_progress
@@ -564,17 +562,17 @@ def _test_gui_callbacks():
             print(f"  [FAIL] Expected 1 epoch callback, got {counts['epoch']}")
             ok = False
         if counts["progress"] == 0:
-            print(f"  [FAIL] No progress callbacks fired")
+            print("  [FAIL] No progress callbacks fired")
             ok = False
         if counts["loss"] == 0:
-            print(f"  [WARN] No loss callbacks fired (may be < log_every steps)")
+            print("  [WARN] No loss callbacks fired (may be < log_every steps)")
         if counts["throughput"] == 0:
-            print(f"  [FAIL] No throughput callbacks fired")
+            print("  [FAIL] No throughput callbacks fired")
             ok = False
         if ok:
-            print(f"\n  CALLBACKS: PASS")
+            print("\n  CALLBACKS: PASS")
         else:
-            print(f"\n  CALLBACKS: FAIL")
+            print("\n  CALLBACKS: FAIL")
         return ok
 
     except Exception as exc:
@@ -792,7 +790,7 @@ def main():
             results["pretrain"] = _test_pretrain(
                 device, pretrain_files, tokenizer, epochs, preset)
         else:
-            print(f"\n  [SKIP] No pretrain data available")
+            print("\n  [SKIP] No pretrain data available")
             results["pretrain"] = None
 
     # Step 6: Fine-tune
@@ -801,7 +799,7 @@ def main():
             results["finetune"] = _test_finetune(
                 device, finetune_data, tokenizer, epochs, preset)
         else:
-            print(f"\n  [SKIP] No fine-tune data available")
+            print("\n  [SKIP] No fine-tune data available")
             results["finetune"] = None
 
     # Step 7: Callbacks
@@ -862,10 +860,10 @@ def main():
         _write_report(report_data, report_path)
 
     if any(v is False for v in results.values()):
-        print(f"\n  RESULT: SOME TESTS FAILED")
+        print("\n  RESULT: SOME TESTS FAILED")
         sys.exit(1)
     else:
-        print(f"\n  RESULT: ALL TESTS PASSED")
+        print("\n  RESULT: ALL TESTS PASSED")
 
 
 if __name__ == "__main__":

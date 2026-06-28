@@ -3,10 +3,11 @@
 pre-tokenized ``data/pretrain/tokens.bin`` corpus (56.6B tokens, vocab 4718).
 
 This is the genuine own-brained model: a from-scratch transformer that learns
-language from the data, NOT a wrapper around someone else's model. The toy
-``forge.py`` reads the whole corpus into RAM and trains a fresh tokenizer — it
-cannot scale to a 211 GB binary. This loads the SAME AdvancedBPETokenizer that
-produced ``tokens.bin`` and streams the tokens via memmap (nanoGPT-style).
+language from the data, NOT a wrapper around someone else's model. It loads
+the SAME AdvancedBPETokenizer that produced ``tokens.bin`` and streams the
+tokens via memmap (nanoGPT-style; the old whole-corpus-in-RAM toy ``forge.py``
+is deleted — git history has it). The instruct pass lives in
+``finetune_enigma.py``, which imports this file's optimizer/schedule arsenal.
 
   python pretrain_enigma.py --sanity                  # 1-step smoke test, then exit
   python pretrain_enigma.py --size base --tokens 2e9  # the real run (~GPT-2-small)
@@ -17,7 +18,12 @@ Checkpoints (model_state_dict + config + step + optimizer + schedule) land in
 previous generation rotated to ``prev.pth`` (and optional frozen snapshots via
 --archive-every). Resumes restore the recorded schedule — pass
 --override-schedule to deliberately change it. The final model is written as ``model.pth`` in the standard
-{model_state_dict, config} format the rest of the stack already loads.
+{model_state_dict, config} format (plus step/optimizer/schedule) the rest of the stack already loads.
+
+Future-run knobs (defaults reproduce the live run exactly; both are schedule-locked
+into checkpoints): ``--optimizer muon`` (Moonlight Muon for the 2-D body, aux AdamW)
+and ``--schedule wsd`` (warmup-stable-decay-to-zero — continuation/multi-epoch
+friendly). Never switch either on an existing lineage.
 """
 from __future__ import annotations
 
@@ -42,14 +48,147 @@ TOKENS_META = ROOT / "data" / "pretrain" / "tokens.json"
 HEADER_BYTES = 256  # ETOK reserved header (see pretokenize_data.py)
 
 
-def get_lr(step: int, warmup: int, total: int, peak: float, min_ratio: float = 0.1) -> float:
-    """Linear warmup → cosine decay to ``min_ratio * peak``."""
+def get_lr(step: int, warmup: int, total: int, peak: float, min_ratio: float = 0.1,
+           schedule: str = "cosine", decay_frac: float = 0.1) -> float:
+    """Linear warmup, then either cosine decay to ``min_ratio * peak`` (default —
+    the live run's recorded schedule; its math is byte-identical to the original)
+    or ``wsd``: hold at peak, then LINEAR decay to ZERO over the last
+    ``decay_frac`` of the run. WSD/D2Z beats cosine at high tokens-per-param and,
+    unlike cosine, lets a "finished" run keep training from the stable phase —
+    the multi-epoch lever (see SUGGESTIONS.md, 2026 landscape check)."""
     if step < warmup:
         return peak * (step + 1) / max(1, warmup)
+    if schedule == "wsd":
+        decay_start = int(total * (1.0 - decay_frac))
+        if step < decay_start:
+            return peak
+        if step >= total:
+            return 0.0
+        return peak * (total - step) / max(1, total - decay_start)
     if step >= total:
         return peak * min_ratio
     prog = (step - warmup) / max(1, total - warmup)
     return peak * (min_ratio + (1 - min_ratio) * 0.5 * (1 + math.cos(math.pi * prog)))
+
+
+def _newton_schulz5(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
+    """Quintic Newton-Schulz iteration that approximately orthogonalizes a 2-D
+    update (drives all singular values toward 1). Runs in bfloat16 — the
+    iteration is stable there and it is the fast path on the GPU. Coefficients
+    are the modded-nanogpt/Moonlight standard."""
+    a, b, c = 3.4445, -4.7750, 2.0315
+    x = g.to(torch.bfloat16)
+    transposed = x.size(0) > x.size(1)
+    if transposed:
+        x = x.mT
+    x = x / (x.norm() + 1e-7)
+    for _ in range(steps):
+        s = x @ x.mT
+        x = a * x + (b * s + c * (s @ s)) @ x
+    if transposed:
+        x = x.mT
+    return x.to(g.dtype)
+
+
+class Muon(torch.optim.Optimizer):
+    """Muon for 2-D weight matrices (Moonlight/Kimi-K2 variant, arXiv:2502.16982):
+    SGD-momentum whose update is orthogonalized by Newton-Schulz, with decoupled
+    weight decay and the 0.2*sqrt(max(shape)) RMS match so one --lr serves both
+    Muon and the aux AdamW. Embeddings/heads/1-D gains do NOT belong here —
+    route them to AdamW (see build_optimizer)."""
+
+    def __init__(self, params, lr: float = 6e-4, momentum: float = 0.95,
+                 weight_decay: float = 0.1, ns_steps: int = 5):
+        super().__init__(params, dict(lr=lr, momentum=momentum,
+                                      weight_decay=weight_decay, ns_steps=ns_steps))
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None if closure is None else closure()
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                g = p.grad
+                if g.ndim > 2:  # safety: fold trailing dims (none in our model)
+                    g = g.reshape(g.size(0), -1)
+                state = self.state[p]
+                if "momentum_buffer" not in state:
+                    state["momentum_buffer"] = torch.zeros_like(g)
+                buf = state["momentum_buffer"]
+                buf.mul_(group["momentum"]).add_(g)
+                u = g.add(buf, alpha=group["momentum"])  # nesterov blend
+                u = _newton_schulz5(u, group["ns_steps"])
+                p.mul_(1.0 - group["lr"] * group["weight_decay"])
+                p.add_(u.reshape(p.shape), alpha=-group["lr"] * 0.2 * math.sqrt(max(p.shape)))
+        return loss
+
+
+class CompositeOptimizer:
+    """Muon(body) + AdamW(embeddings/1-D) behind one optimizer face. Duck-typed
+    where the loop needs it: param_groups (lr updates + grad clip + GradScaler
+    unscale), step/zero_grad, state_dict/load_state_dict. The state format is
+    tagged so loading it into a plain-AdamW run (or vice versa) fails loudly."""
+
+    def __init__(self, opts):
+        self.opts = list(opts)
+
+    @property
+    def param_groups(self):
+        return [g for o in self.opts for g in o.param_groups]
+
+    def step(self, closure=None):
+        for o in self.opts:
+            o.step()
+
+    def zero_grad(self, set_to_none: bool = True):
+        for o in self.opts:
+            o.zero_grad(set_to_none=set_to_none)
+
+    def state_dict(self):
+        return {"composite": [o.state_dict() for o in self.opts]}
+
+    def load_state_dict(self, sd):
+        if "composite" not in sd:
+            raise ValueError("optimizer state is not composite — this checkpoint "
+                             "was saved by a different --optimizer")
+        for o, s in zip(self.opts, sd["composite"]):
+            o.load_state_dict(s)
+
+
+def build_optimizer(model: torch.nn.Module, kind: str, lr: float, weight_decay: float):
+    """``adamw`` (default) reproduces the live run's optimizer EXACTLY — same
+    groups, same parameters()-iteration order, so its state_dict keeps fitting
+    the 51k lineage. ``muon`` routes the 2-D body matrices to Muon and keeps
+    embeddings (tied head) + 1-D gains on AdamW — for FUTURE runs only.
+    Weight decay stays on >=2-D tensors only (norm gains are never decayed)."""
+    decay, no_decay, body = [], [], []
+    for name, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        if p.dim() < 2:
+            no_decay.append(p)
+        elif kind == "muon" and "tok_embeddings" not in name and "output" not in name:
+            body.append(p)
+        else:
+            decay.append(p)
+    if kind == "muon":
+        optim = CompositeOptimizer([
+            Muon(body, lr=lr, weight_decay=weight_decay),
+            torch.optim.AdamW(
+                [{"params": decay, "weight_decay": weight_decay},
+                 {"params": no_decay, "weight_decay": 0.0}],
+                lr=lr, betas=(0.9, 0.95)),
+        ])
+        print(f"optim: Muon on {len(body)} body matrices (NS5, rms-matched) + AdamW on "
+              f"{len(decay)} embedding + {len(no_decay)} 1-D tensors", flush=True)
+        return optim
+    optim = torch.optim.AdamW(
+        [{"params": decay, "weight_decay": weight_decay},
+         {"params": no_decay, "weight_decay": 0.0}],
+        lr=lr, betas=(0.9, 0.95))
+    print(f"optim: weight-decay on {len(decay)} tensors, none on {len(no_decay)}", flush=True)
+    return optim
 
 
 def main() -> None:
@@ -65,6 +204,15 @@ def main() -> None:
     ap.add_argument("--dropout", type=float, default=0.0,
                     help="dropout (0.0 for single-epoch pretraining; presets default to 0.1)")
     ap.add_argument("--grad-clip", type=float, default=1.0)
+    ap.add_argument("--optimizer", choices=["adamw", "muon"], default="adamw",
+                    help="adamw = the live run's exact path. muon (Moonlight variant) "
+                         "is for FUTURE runs — never switch mid-lineage")
+    ap.add_argument("--schedule", choices=["cosine", "wsd"], default="cosine",
+                    help="cosine = the live run's schedule. wsd = warmup-stable-decay "
+                         "(linear decay-to-zero over the last --wsd-decay-frac) — "
+                         "continuation-friendly, for FUTURE runs")
+    ap.add_argument("--wsd-decay-frac", type=float, default=0.10,
+                    help="fraction of total steps spent in the WSD decay phase")
     ap.add_argument("--save-every", type=int, default=250, help="steps between checkpoints")
     ap.add_argument("--eval-every", type=int, default=250, help="steps between val-loss checks")
     ap.add_argument("--eval-iters", type=int, default=40)
@@ -186,7 +334,9 @@ def main() -> None:
             # held out from here on.
             for j in range(len(ix)):
                 while vg_lo - block <= ix[j] < vg_end:
-                    ix[j] = np.random.randint(lo, hi - block - 1)
+                    # dtype is load-bearing: legacy randint defaults to C-long
+                    # (int32 on Windows) and hi is ~56.7e9.
+                    ix[j] = np.random.randint(lo, hi - block - 1, dtype=np.int64)
         x = np.stack([np.asarray(data[i:i + block], dtype=np.int64) for i in ix])
         y = np.stack([np.asarray(data[i + 1:i + 1 + block], dtype=np.int64) for i in ix])
         X = torch.from_numpy(x).to(device, non_blocking=True)
@@ -222,15 +372,7 @@ def main() -> None:
           f"layers={config.n_layers} heads={config.n_heads} block={block} "
           f"diff_attn={config.use_differential_attn}", flush=True)
 
-    # Weight-decay only tensors with dim>=2 (matmuls, embeddings); never 1-D params
-    # (RMSNorm gains) — decaying norm scales mildly hurts. Standard GPT-2/nanoGPT split.
-    _decay = [p for p in raw_model.parameters() if p.requires_grad and p.dim() >= 2]
-    _no_decay = [p for p in raw_model.parameters() if p.requires_grad and p.dim() < 2]
-    optim = torch.optim.AdamW(
-        [{"params": _decay, "weight_decay": args.weight_decay},
-         {"params": _no_decay, "weight_decay": 0.0}],
-        lr=args.lr, betas=(0.9, 0.95))
-    print(f"optim: weight-decay on {len(_decay)} tensors, none on {len(_no_decay)}", flush=True)
+    optim = build_optimizer(raw_model, args.optimizer, args.lr, args.weight_decay)
 
     use_bf16 = device == "cuda" and torch.cuda.is_bf16_supported()
     amp_dtype = torch.bfloat16 if use_bf16 else torch.float16
@@ -245,7 +387,8 @@ def main() -> None:
     # (--save-every/--eval-every/--compile/--throttle-ms/...) stay CLI-controlled.
     schedule = {k: getattr(args, k) for k in (
         "tokens", "lr", "warmup", "micro_batch", "grad_accum", "block", "dropout",
-        "val_tokens", "weight_decay", "grad_clip", "val_general_end")}
+        "val_tokens", "weight_decay", "grad_clip", "val_general_end",
+        "optimizer", "schedule", "wsd_decay_frac")}
 
     out = Path(args.out) if args.out else ROOT / "models" / f"enigma_pretrain_{args.size}"
     out.mkdir(parents=True, exist_ok=True)
@@ -261,7 +404,13 @@ def main() -> None:
             raise SystemExit(f"resume arch mismatch — refusing to corrupt: "
                              f"missing={real_missing[:5]} unexpected={unexpected[:5]}")
         if "optimizer" in ck:
-            optim.load_state_dict(ck["optimizer"])
+            try:
+                optim.load_state_dict(ck["optimizer"])
+            except Exception as exc:
+                raise SystemExit(
+                    f"resume: checkpoint optimizer state does not fit --optimizer "
+                    f"{args.optimizer} ({exc}) — the run was saved with a different "
+                    f"optimizer; refusing to continue with reset moments") from None
         start_step = int(ck.get("step", 0))
         print(f"resumed from {args.resume} at step {start_step}", flush=True)
 
@@ -336,7 +485,8 @@ def main() -> None:
     base_tokens = start_step * tokens_per_step
     seen = base_tokens
     for step in range(start_step, total_steps):
-        lr = get_lr(step, args.warmup, total_steps, args.lr)
+        lr = get_lr(step, args.warmup, total_steps, args.lr,
+                    schedule=args.schedule, decay_frac=args.wsd_decay_frac)
         for g in optim.param_groups:
             g["lr"] = lr
         optim.zero_grad(set_to_none=True)
