@@ -4,19 +4,18 @@ Guidance for Claude Code working in this repo. Keep this file short (target <200
 Harness-enforced rules (permissions, hooks, model) belong in `.claude/settings.json`, NOT here.
 
 ## What this is
-Two subsystems live here:
-1. **Enigma** — a **from-scratch** decoder-only LLM (its own architecture, BPE tokenizer base vocab
-   4718, and weights; NOT a wrapper). Python. Pipeline is **pretrain → SFT → serve**; train + serve
-   share one chat renderer (`enigma_engine/core/chat_format.py`) so the prompt format can't drift.
-2. **Enigma Avatar** (`enigma-avatar/`) — a sibling product (relocated out of `mods/`): an Electron + Three.js transparent desktop pet that drives
-   any `.glb`/`.vrm` with **pure procedural** motion (no canned animation), composited from masked,
-   weighted pose/flex layers fed over a local WebSocket bus. See the Avatar section below.
+This repo is **Enigma** — a **from-scratch** decoder-only LLM (its own architecture, BPE tokenizer base
+vocab 4718, and weights; NOT a wrapper). Python. Pipeline is **pretrain → SFT → serve**; train + serve
+share one chat renderer (`enigma_engine/core/chat_format.py`) so the prompt format can't drift.
+
+**Enigma Avatar** (the Electron desktop overlay an LLM can drive) was split into a **separate sibling
+repo** at `C:\Users\SirKn\Enigma Avatar\` on 2026-06-28 (full history preserved). The two meet only at
+the local WebSocket bus (`ws://127.0.0.1:8765`). Work on the avatar in THAT repo, not here.
 
 ## Setup / build / test — run these first
 - Python 3.12 (`C:\Users\SirKn\AppData\Local\Programs\Python\Python312\python.exe`).
 - Enigma tests: `python -m pytest tests/ -q`   ·   Lint: `ruff check`
-- Avatar tests: `cd enigma-avatar && node --test` (Node built-in runner; ~217 tests, some skip
-  without the real model library). `node --check <file>.js` for a quick syntax pass.
+- (Avatar tests live in the separate **Enigma Avatar** repo now — run `node --test` there.)
 - If a fresh session can't run the tests from this section, fix THIS section first.
 
 ## The pipeline
@@ -39,27 +38,12 @@ Two subsystems live here:
 - From-scratch ethos: prefer fresh, correct code; engines should fail honestly ("feature absent")
   rather than guess.
 
-## Enigma Avatar (`enigma-avatar/`) — a sibling product, not a mod
-- **Authoritative spec lives OUTSIDE the repo:** `C:\Users\SirKn\3d Avatar\The project is to make a
-  3d model t.txt` (REV 6). Models live in `C:\Users\SirKn\3d Avatar\Avatars\`. Judge/recode against
-  the SPEC's intent, NOT against what the code currently does — passing tests often just enshrine
-  wrong behavior. Loading from that external dir MUST keep working (no path-restricting the loader).
-- **Control plane = a local WebSocket bus** (`bus.py`, `ws://127.0.0.1:8765`), driven by `say.py`
-  (fire-and-forget) and `tools/avbus.py` (request/reply). The bus is the right way for an AI to drive
-  her — pose/look/conjure/say/capabilities, plus inline perform tags in speech (`[pose:role=p/y/r]`,
-  `[look:dir]`, `[conjure:x]`). It is **Origin-gated** (blocks browser drive-by / CSWSH); keep it so.
-- **SAFETY — fail-safe click-through is load-bearing.** The overlay is transparent and must pass
-  clicks THROUGH to the desktop whenever it's unsure the cursor is over her mesh — it once **locked
-  the user out of their own desktop**. Never weaken: the arbiter's cursor-display gate, the
-  `_forceThrough` panic latch, or the panic key (`Ctrl+Shift+Alt+C` = force-through, `…+Q` = quit,
-  tray = independent reclaim). Every hit-test failure mode must default to THROUGH, never CAPTURE.
-- **Guard at the engine boundary, not the caller.** The "fail honestly" ethos applies per-engine:
-  validate inputs (finite numbers, well-formed shapes) where they ENTER an engine (setLayer, setMouth,
-  throwProp, the loader), so a bad bus message degrades honestly instead of permanently bricking a
-  bone/mouth/sim. Don't rely on the live caller happening to pass clean data.
-- **Generic-only:** no per-model rig overrides, no canned gestures/emotes. Fit rigs via the 19-role
-  cascade (VRM → name → geometry → between); author motion via pose/flex/setFingers. Don't re-add the
-  removed override mechanism.
+## Enigma Avatar — now a separate repo
+The desktop overlay moved to its own repository at `C:\Users\SirKn\Enigma Avatar\` (2026-06-28, full
+history preserved). Its working guidance — the load-bearing **fail-safe click-through / panic-latch**
+safety rules, the Origin-gated **bus** protocol, the per-engine **guard-at-the-boundary** ethos, the
+**generic-only** rule, and the external spec/model locations under `C:\Users\SirKn\3d Avatar\` — lives
+in THAT repo's `CLAUDE.md` + `STATUS.md`. From here, the only coupling is the WebSocket bus protocol.
 
 ## Working style
 - "Make a plan first" means present the plan and **stop for approval** — don't build it in the same pass.
@@ -73,7 +57,7 @@ Two subsystems live here:
 - **No C++ build toolchain on this box.** Only adopt npm/native deps that ship PREBUILT binaries —
   verify before installing. (`koffi`, a prebuilt FFI, works and is how the overlay calls Win32;
   `node-window-manager` needed a compiler and failed. Wasted a round-trip installing it.)
-- **One-off Electron/Node probes: run them from `enigma-avatar/`** (so `node_modules` resolves), write
+- **One-off Electron/Node probes** belong in the **Enigma Avatar** repo now (so `node_modules` resolves); write
   the result to a file and `process.exit()`, then delete the probe. Running from a dir without
   `node_modules` (e.g. the scratchpad), piping stdout through another command, or relying on
   `app.quit()` makes Electron HANG or pop a blocking GUI error dialog in this non-interactive shell —

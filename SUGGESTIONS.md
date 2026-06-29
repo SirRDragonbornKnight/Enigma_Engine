@@ -60,7 +60,7 @@
    false for the from-scratch model). The curation pass is the user's
    authorship. The WHY lives in the vision memory (Jarvis-class companion
    that provably won't turn evil).
-6. **Avatar embodiment.** `enigma-avatar/TODO.md` is AUTHORITATIVE for that
+6. **Avatar embodiment.** The avatar is its own repo now (`C:\Users\SirKn\Enigma Avatar\`); its `TODO.md` is AUTHORITATIVE for that
    backlog — read it before any avatar task.
 
 ## 2026 landscape check (researched 2026-06-11)

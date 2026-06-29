@@ -1,7 +1,0 @@
-node_modules
-models
-outputs
-assets
-vendor
-package-lock.json
-*.min.js
